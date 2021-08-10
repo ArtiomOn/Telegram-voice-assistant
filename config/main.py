@@ -49,7 +49,7 @@ async def reformat_text(text, message: types.Message):
 
 async def execute_cmd(message, command, question, choice):
     if fuzz.partial_ratio(command, "создай опрос") > 70:
-        await bot.send_poll(message.chat.id, question=question.capitalize(), options=choice)
+        await bot.send_poll(message.chat.id, question=question.capitalize(), options=choice, is_anonymous=False)
     else:
         await bot.send_message(message.chat.id, 'Sorry, not found')
 
