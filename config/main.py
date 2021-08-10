@@ -19,13 +19,6 @@ bot = Bot(token=os.getenv('TOKEN'))
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-opts = {
-    'tbr': ('создай', 'сделай', 'сгенерируй'),
-    'cmds': {
-        'pull': ('опрос', 'пулл', 'pull')
-    }
-}
-
 
 @dp.message_handler(content_types=types.ContentType.VOICE)
 async def assist(message: types.Message):
@@ -35,25 +28,28 @@ async def assist(message: types.Message):
         convert_ogg_to_wav(ogg_destination, wav_destination)
         query = audio_file_to_text(wav_destination)
         await message.delete()
-        await bot.send_message(message.chat.id, query)
-        return query
+        await reformat_text(query, message)
 
 
-async def recognize_cmd(cmd):
-    rec = {'cmd': '', 'percent': 0}
-    for c, v in opts['cmds'].items():
-        for x in v:
-            vrt = fuzz.ratio(cmd, x)
-            if vrt > rec['percent']:
-                rec['cmd'] = c
-                rec['percent'] = vrt
+async def reformat_text(text, message: types.Message):
+    pull_choice_data = []
+    command_create_pull_data = text.partition('создай опрос')[1]
+    question_first_index = text.find('вопрос')
+    question_last_index = text.find('варианты')
+    pull_question_row = text[question_first_index: question_last_index]
+    pull_question_data = pull_question_row.partition('вопрос')[2]
+    pull_choice_first_index = text.find('варианты')
+    pull_choice_last_index = len(text)
+    pull_choice_data_row = text[pull_choice_first_index:pull_choice_last_index].partition('ответа')[2]
+    for i in range(pull_choice_data_row.count('пункт')):
+        pull_choice_data.append(pull_choice_data_row.split('пункт', int(i + 2))[int(i + 1)])
 
-    return rec
+    await execute_cmd(message, command_create_pull_data, pull_question_data, pull_choice_data)
 
 
-async def execute_cmd(cmd, message: types.Message):
-    if cmd == 'pull':
-        await bot.send_message(message.chat.id, 'Testing')
+async def execute_cmd(message, command, question, choice):
+    if fuzz.partial_ratio(command, "создай опрос") > 70:
+        await bot.send_poll(message.chat.id, question=question.capitalize(), options=choice)
     else:
         await bot.send_message(message.chat.id, 'Sorry, not found')
 
