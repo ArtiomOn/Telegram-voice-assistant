@@ -1,13 +1,14 @@
 import logging
 import os
 from datetime import datetime
-
 import dotenv
 from aiogram import types, Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.utils import executor
-from sqlalchemy.orm import sessionmaker
+from aiogram.utils.exceptions import BotBlocked
 from fuzzywuzzy import fuzz
+from sqlalchemy.orm import sessionmaker
+from youtubesearchpython import *
 
 from config.models import PullData, database_dsn
 from services.converter import convert_ogg_to_wav
@@ -27,15 +28,19 @@ dp = Dispatcher(bot, storage=storage)
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await bot.send_message(message.chat.id, 'Чтобы создать обычный опрос надо произнести ключевые слова - '
-                                            'они подмечены жирным шрифтом.\n\n'
-                                            '<b>Бот создай опрос</b> [ваш вопрос] <b>вариант</b> [ваш вариант ответа], '
-                                            '<b>вариант</b> [ваш вариант ответа]...\n\n'
-                                            'Чтобы создать анонимный опрос надо произнести ключевые слова - '
-                                            'они подмечены жирным шрифтом.\n\n'
-                                            '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>вариант</b> '
-                                            '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...',
-                           parse_mode='html')
+    try:
+        await bot.send_message(message.chat.id, 'Чтобы создать обычный опрос надо произнести ключевые слова - '
+                                                'они подмечены жирным шрифтом.\n\n'
+                                                '<b>Бот создай опрос</b> [ваш вопрос] <b>вариант</b> '
+                                                '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...\n\n'
+                                                'Чтобы создать анонимный опрос надо произнести ключевые слова - '
+                                                'они подмечены жирным шрифтом.\n\n'
+                                                '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>вариант</b> '
+                                                '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...',
+                               parse_mode='html')
+        await bot.get_chat_member(message.chat.id, bot.id)
+    except BotBlocked:
+        logging.info(f'Bot was blocked by user {message.from_user.id}')
 
 
 @dp.message_handler(content_types=types.ContentType.VOICE)
@@ -50,10 +55,19 @@ async def assist(message: types.Message):
         except Exception as e:
             logging.info(f'Error occurs {e} with user {message.from_user.id}')
         else:
-            await reformat_text(query, message)
+            await command_handler(query, message)
 
 
-async def reformat_text(text, message: types.Message):
+async def command_handler(query, message: types.Message):
+    if query.find('создай') != -1 or query.find('опрос') != -1:
+        await create_poll(query, message)
+    elif query.find('найди') != -1 or query.find('видео') != -1:
+        await get_video_link(query, message)
+    else:
+        await bot.send_message(message.chat.id, 'Not found')
+
+
+async def create_poll(text, message: types.Message):
     pull_choice_data_row = []
     # Get create poll command
     command_create_pull_first_index = text.find('создай')
@@ -81,7 +95,6 @@ async def reformat_text(text, message: types.Message):
         pull_choice_data_row.append(
             ''.join(pull_choice_data_words.split()).split('выбор', int(i + 2))[int(i + 1)].capitalize())
     pull_choice_data = [choices for choices in pull_choice_data_row if choices.strip()]
-
     # Save data in postgres
     query = PullData(user_id=message.from_user.id,
                      pull_question=pull_question_data,
@@ -90,10 +103,18 @@ async def reformat_text(text, message: types.Message):
                      )
     session.add(query)
     session.commit()
-    await execute_cmd(message, command_create_pull_data, pull_question_data, pull_choice_data)
+    await execute_poll(message, command_create_pull_data, pull_question_data, pull_choice_data)
 
 
-async def execute_cmd(message, command, question, choice):
+async def get_video_link(query, message: types.Message):
+    command_find_video_name_first_index = query.find('видео')
+    command_find_video_name_last_index = len(query)
+    command_find_video_data_row = query[command_find_video_name_first_index: command_find_video_name_last_index]
+    command_find_video_data = command_find_video_data_row.partition('видео')[2]
+    await testing_new_future(message, command_find_video_data)
+
+
+async def execute_poll(message, command, question, choice):
     if command == 'обычный':
         if len(choice) < 2:
             await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=['Да', 'Нет'],
@@ -111,6 +132,16 @@ async def execute_cmd(message, command, question, choice):
                                 is_anonymous=True)
     else:
         await bot.send_message(message.chat.id, 'Не понял вашу команду, повторите еще раз')
+
+
+@dp.message_handler(commands=['testing'])
+async def testing_new_future(message: types.Message, text):
+    # Todo Find better solution for youtube search
+    custom_search = CustomSearch(f'{text}', VideoUploadDateFilter.lastHour, limit=20)
+
+    for i in range(3):
+        print(custom_search.result())
+        # await bot.send_message(message.chat.id, custom_search.result()['result'][i]['link'])
 
 
 if __name__ == "__main__":
