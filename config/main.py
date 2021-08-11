@@ -27,10 +27,15 @@ dp = Dispatcher(bot, storage=storage)
 
 @dp.message_handler(commands=['start'])
 async def start(message: types.Message):
-    await bot.send_message(message.chat.id, 'Чтобы создать опрос надо произнести ключевые слова - '
+    await bot.send_message(message.chat.id, 'Чтобы создать обычный опрос надо произнести ключевые слова - '
                                             'они подмечены жирным шрифтом.\n\n'
                                             '<b>Бот создай опрос</b> [ваш вопрос] <b>вариант</b> [ваш вариант ответа], '
-                                            '<b>вариант</b> [ваш вариант ответа]...', parse_mode='html')
+                                            '<b>вариант</b> [ваш вариант ответа]...\n\n'
+                                            'Чтобы создать анонимный опрос надо произнести ключевые слова - '
+                                            'они подмечены жирным шрифтом.\n\n'
+                                            '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>вариант</b> '
+                                            '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...',
+                           parse_mode='html')
 
 
 @dp.message_handler(content_types=types.ContentType.VOICE)
@@ -49,19 +54,33 @@ async def assist(message: types.Message):
 
 
 async def reformat_text(text, message: types.Message):
-    pull_choice_data = []
-    command_create_pull_data = text.partition('создай опрос')[1]
+    pull_choice_data_row = []
+    # Get create poll command
+    command_create_pull_first_index = text.find('создай')
+    command_create_pull_last_index = text.find('опрос')
+    command_create_pull_data_row = text[command_create_pull_first_index: command_create_pull_last_index]
+    command_create_pull_data = ' '.join(command_create_pull_data_row.partition('создай')[2].split())
+    if fuzz.partial_ratio(command_create_pull_data, "анонимный") > 70:
+        command_create_pull_data = 'анонимный'
+    else:
+        command_create_pull_data = 'обычный'
+
+    # Get pull question
     question_first_index = text.find('опрос')
     question_last_index = text.find('выбор')
     pull_question_row = text[question_first_index: question_last_index]
     pull_question_data = ' '.join(pull_question_row.partition('опрос')[2].split()).capitalize()
+
+    # Get poll choice
     pull_choice_first_index = text.find('выбор')
     pull_choice_last_index = len(text)
-    pull_choice_data_row = text[pull_choice_first_index:pull_choice_last_index]
-    for i in range(pull_choice_data_row.count('выбор')):
-        pull_choice_data.append(
-            ' '.join(pull_choice_data_row.split()).split('выбор', int(i + 2))[int(i + 1)].capitalize())
+    pull_choice_data_words = text[pull_choice_first_index:pull_choice_last_index]
+    for i in range(pull_choice_data_words.count('выбор')):
+        pull_choice_data_row.append(
+            ''.join(pull_choice_data_words.split()).split('выбор', int(i + 2))[int(i + 1)].capitalize())
+    pull_choice_data = [choices for choices in pull_choice_data_row if choices.strip()]
 
+    # Save data in postgres
     query = PullData(user_id=message.from_user.id,
                      pull_question=pull_question_data,
                      pull_choice=pull_choice_data,
@@ -73,13 +92,21 @@ async def reformat_text(text, message: types.Message):
 
 
 async def execute_cmd(message, command, question, choice):
-    if fuzz.partial_ratio(command, "бот создай опрос") > 70:
+    if command == 'обычный':
         if len(choice) < 2:
             await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=['Да', 'Нет'],
                                 is_anonymous=False)
         else:
             await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=choice,
                                 is_anonymous=False)
+
+    elif command == 'анонимный':
+        if len(choice) < 2:
+            await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=['Да', 'Нет'],
+                                is_anonymous=True)
+        else:
+            await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=choice,
+                                is_anonymous=True)
     else:
         await bot.send_message(message.chat.id, 'Не понял вашу команду, повторите еще раз')
 

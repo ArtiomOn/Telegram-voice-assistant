@@ -3,7 +3,6 @@ import uuid
 
 from config.settings import STORAGE_ROOT
 
-
 OGG_ROOT = os.path.join(STORAGE_ROOT, 'ogg')
 WAV_ROOT = os.path.join(STORAGE_ROOT, 'wav')
 
