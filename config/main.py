@@ -62,6 +62,8 @@ async def reformat_text(text, message: types.Message):
     command_create_pull_data = ' '.join(command_create_pull_data_row.partition('создай')[2].split())
     if fuzz.partial_ratio(command_create_pull_data, "анонимный") > 70:
         command_create_pull_data = 'анонимный'
+    elif command_create_pull_last_index == -1 or command_create_pull_first_index == -1:
+        command_create_pull_data = 'NonType'
     else:
         command_create_pull_data = 'обычный'
 
