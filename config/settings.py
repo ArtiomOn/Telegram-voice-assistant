@@ -7,7 +7,7 @@ TOKEN = os.getenv('TOKEN')
 
 BASE_ROOT = os.path.dirname(os.path.abspath(__file__))
 
-STORAGE_ROOT = os.path.join(os.path.join(BASE_ROOT), 'storage')
+STORAGE_ROOT = os.path.join(os.path.dirname(BASE_ROOT), 'storage')
 
 database = os.getenv('DATA_BASE')
 user = os.getenv('POSTGRES_USER')
