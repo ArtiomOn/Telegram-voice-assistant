@@ -11,6 +11,7 @@
 pyvenv.cfg
 .env
 .venv
+storage/
 pip-selfcheck.json
 
 ### JetBrains template
