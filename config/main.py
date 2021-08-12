@@ -111,7 +111,7 @@ async def get_video_link(query, message: types.Message):
     command_find_video_name_last_index = len(query)
     command_find_video_data_row = query[command_find_video_name_first_index: command_find_video_name_last_index]
     command_find_video_data = command_find_video_data_row.partition('видео')[2]
-    await testing_new_future(message, command_find_video_data)
+    await get_video_handler(message, command_find_video_data)
 
 
 async def execute_poll(message, command, question, choice):
@@ -134,14 +134,14 @@ async def execute_poll(message, command, question, choice):
         await bot.send_message(message.chat.id, 'Не понял вашу команду, повторите еще раз')
 
 
-@dp.message_handler(commands=['testing'])
-async def testing_new_future(message: types.Message, text):
-    # Todo Find better solution for youtube search
-    custom_search = CustomSearch(f'{text}', VideoUploadDateFilter.lastHour, limit=20)
+async def get_video_handler(message: types.Message, query):
+    custom_search = CustomSearch(query=f'{query}', limit=2, searchPreferences='en')
 
-    for i in range(3):
-        print(custom_search.result())
-        # await bot.send_message(message.chat.id, custom_search.result()['result'][i]['link'])
+    if custom_search.result()['result']:
+        for i in range(2):
+            await bot.send_message(message.chat.id, dict(custom_search.result()['result'][i]).get('link'))
+    else:
+        await bot.send_message(message.chat.id, 'Видео не было найдено')
 
 
 if __name__ == "__main__":
