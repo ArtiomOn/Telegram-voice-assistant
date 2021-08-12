@@ -1,6 +1,7 @@
 import logging
 import os
 import requests
+import shutil
 from datetime import datetime
 
 import dotenv
@@ -30,20 +31,28 @@ dp = Dispatcher(bot, storage=storage)
 
 
 @dp.message_handler(commands=['start'])
-async def start(message: types.Message):
+async def command_start(message: types.Message):
     try:
-        await bot.send_message(message.chat.id, 'Чтобы создать обычный опрос надо произнести ключевые слова - '
-                                                'они подмечены жирным шрифтом.\n\n'
-                                                '<b>Бот создай опрос</b> [ваш вопрос] <b>выбор</b> '
-                                                '[ваш вариант ответа], <b>выбор</b> [ваш вариант ответа]...\n\n'
-                                                'Чтобы создать анонимный опрос надо произнести ключевые слова - '
-                                                'они подмечены жирным шрифтом.\n\n'
-                                                '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>выбор</b> '
-                                                '[ваш вариант ответа], <b>выбор</b> [ваш вариант ответа]...',
-                               parse_mode='html')
-        await bot.get_chat_member(message.chat.id, bot.id)
+        await bot.send_message(message.chat.id, 'Чтобы увидеть инструкцию напишите - /help')
     except BotBlocked:
         logging.info(f'Bot was blocked by user {message.from_user.id}')
+
+
+@dp.message_handler(commands=['help'])
+async def command_help(message: types.Message):
+    await bot.send_message(message.chat.id, '--{опциональный ответ пользователя}\n'
+                                            '--[обязательный ответ пользователя]\n\n'
+                                            'Чтобы создать опрос надо произнести ключевые слова - '
+                                            'они подмечены жирным шрифтом.\n'
+                                            '<b>*Бот создай {анонимный} опрос</b> [ваш вопрос] <b>выбор</b> '
+                                            '[ваш вариант ответа], <b>выбор</b> [ваш вариант ответа]...\n\n'
+                                            'Чтобы найти видео в ютубе надо произнести ключевые слова -\n'
+                                            '<b>*Бот найди видео</b> [название видео]\n\n'
+                                            'Чтобы посмотреть актуальную на данный момент погоду надо произнести '
+                                            'ключевые слова -\n'
+                                            '<b>*Бот какая сейчас погода в стране</b> [страна] '
+                                            'P.S пример МолдовА, РоссиЯ',
+                           parse_mode='html')
 
 
 @dp.message_handler(content_types=types.ContentType.VOICE)
@@ -108,7 +117,7 @@ async def create_poll(text, message: types.Message):
                      )
     session.add(query)
     session.commit()
-    await execute_poll(message, command_create_pull_data, pull_question_data, pull_choice_data)
+    await poll_handler(message, command_create_pull_data, pull_question_data, pull_choice_data)
 
 
 async def get_video_link(query, message: types.Message):
@@ -123,11 +132,15 @@ async def get_weather(query, message: types.Message):
     command_find_weather_first_index = query.find('погода')
     command_find_weather_last_index = len(query)
     command_find_weather_data_row = query[command_find_weather_first_index:command_find_weather_last_index]
-    command_find_weather_data = command_find_weather_data_row.partition('погода')[2]
-    await test(message, command_find_weather_data.strip())
+    if command_find_weather_data_row.find('городе') > -1:
+        command_find_weather_data = command_find_weather_data_row.partition('городе')[2]
+        await get_weather_handler(message, command_find_weather_data.strip())
+    elif command_find_weather_data_row.find('стране') > -1:
+        command_find_weather_data = command_find_weather_data_row.partition('стране')[2]
+        await get_weather_handler(message, command_find_weather_data.strip())
 
 
-async def execute_poll(message, command, question, choice):
+async def poll_handler(message, command, question, choice):
     if command == 'обычный':
         if len(choice) < 2:
             await bot.send_poll(message.chat.id, question=f'{question.capitalize()}?', options=['Да', 'Нет'],
@@ -157,8 +170,7 @@ async def get_video_handler(message: types.Message, query):
         await bot.send_message(message.chat.id, 'Видео не было найдено')
 
 
-@dp.message_handler(commands=['test'])
-async def test(message: types.Message, city):
+async def get_weather_handler(message: types.Message, city):
     response = requests.get(
         url=f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OWM_KEY}&units=metric')
     if response.status_code == 200:
@@ -172,14 +184,24 @@ async def test(message: types.Message, city):
         weather_humidity = weather_main['humidity']
         wind_speed = wind_data['speed']
 
-        await bot.send_message(message.chat.id, f'Страна - {country_name}\n'
+        if weather_description.find('clouds') > -1:
+            sti = open('../static/clouds.tgs', 'rb')
+            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+        elif weather_description.find('clear') > -1:
+            sti = open('../static/sunny.tgs', 'rb')
+            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+        elif weather_description.find('rain') > -1:
+            sti = open('../static/rain.tgs', 'rb')
+            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+        await bot.send_message(message.chat.id, f'Местность - {country_name}\n'
                                                 f'Небо - {weather_description}\n'
-                                                f'Скорость ветра - {wind_speed} km/h\n'
+                                                f'Скорость ветра - {wind_speed} m/h\n'
                                                 f'Температура - {str(weather_tamp)[:2]}°C\n'
                                                 f'Влажность - {weather_humidity}%')
     else:
-        await bot.send_message(message.chat.id, 'Я не нашел странну, пример ввода страны - Молдова, Россия...')
+        await bot.send_message(message.chat.id, 'Я не нашел странну, пример ввода страны - МолдовА, РоссиЯ...')
 
 
 if __name__ == "__main__":
-    executor.start_polling(dp, skip_updates=False)
+    executor.start_polling(dp, skip_updates=False, timeout=120)
+    shutil.rmtree(r'C:\Users\artio\PycharmProjects\pull_bot\storage')
