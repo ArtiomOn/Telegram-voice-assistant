@@ -1,6 +1,8 @@
 import logging
 import os
+import requests
 from datetime import datetime
+
 import dotenv
 from aiogram import types, Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -22,6 +24,7 @@ session = sessionmaker(bind=database_dsn)()
 dotenv.load_dotenv()
 
 bot = Bot(token=os.getenv('TOKEN'))
+OWM_KEY = os.getenv('OWM_KEY')
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
@@ -31,12 +34,12 @@ async def start(message: types.Message):
     try:
         await bot.send_message(message.chat.id, 'Чтобы создать обычный опрос надо произнести ключевые слова - '
                                                 'они подмечены жирным шрифтом.\n\n'
-                                                '<b>Бот создай опрос</b> [ваш вопрос] <b>вариант</b> '
-                                                '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...\n\n'
+                                                '<b>Бот создай опрос</b> [ваш вопрос] <b>выбор</b> '
+                                                '[ваш вариант ответа], <b>выбор</b> [ваш вариант ответа]...\n\n'
                                                 'Чтобы создать анонимный опрос надо произнести ключевые слова - '
                                                 'они подмечены жирным шрифтом.\n\n'
-                                                '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>вариант</b> '
-                                                '[ваш вариант ответа], <b>вариант</b> [ваш вариант ответа]...',
+                                                '<b>Бот создай анонимный опрос</b> [ваш вопрос] <b>выбор</b> '
+                                                '[ваш вариант ответа], <b>выбор</b> [ваш вариант ответа]...',
                                parse_mode='html')
         await bot.get_chat_member(message.chat.id, bot.id)
     except BotBlocked:
@@ -63,8 +66,10 @@ async def command_handler(query, message: types.Message):
         await create_poll(query, message)
     elif query.find('найди') != -1 or query.find('видео') != -1:
         await get_video_link(query, message)
+    elif query.find('погода') != -1:
+        await get_weather(query, message)
     else:
-        await bot.send_message(message.chat.id, 'Not found')
+        await bot.send_message(message.chat.id, 'Не распознал вашу команду - для информации напишите /start')
 
 
 async def create_poll(text, message: types.Message):
@@ -114,6 +119,14 @@ async def get_video_link(query, message: types.Message):
     await get_video_handler(message, command_find_video_data)
 
 
+async def get_weather(query, message: types.Message):
+    command_find_weather_first_index = query.find('погода')
+    command_find_weather_last_index = len(query)
+    command_find_weather_data_row = query[command_find_weather_first_index:command_find_weather_last_index]
+    command_find_weather_data = command_find_weather_data_row.partition('погода')[2]
+    await test(message, command_find_weather_data.strip())
+
+
 async def execute_poll(message, command, question, choice):
     if command == 'обычный':
         if len(choice) < 2:
@@ -142,6 +155,30 @@ async def get_video_handler(message: types.Message, query):
             await bot.send_message(message.chat.id, dict(custom_search.result()['result'][i]).get('link'))
     else:
         await bot.send_message(message.chat.id, 'Видео не было найдено')
+
+
+@dp.message_handler(commands=['test'])
+async def test(message: types.Message, city):
+    response = requests.get(
+        url=f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OWM_KEY}&units=metric')
+    if response.status_code == 200:
+        country_name = response.json().get('name')
+        weather_main = response.json().get('main')
+        weather_data = response.json().get('weather')
+        wind_data = response.json().get('wind')
+
+        weather_tamp = weather_main['temp']
+        weather_description = weather_data[0]['description']
+        weather_humidity = weather_main['humidity']
+        wind_speed = wind_data['speed']
+
+        await bot.send_message(message.chat.id, f'Страна - {country_name}\n'
+                                                f'Небо - {weather_description}\n'
+                                                f'Скорость ветра - {wind_speed} km/h\n'
+                                                f'Температура - {str(weather_tamp)[:2]}°C\n'
+                                                f'Влажность - {weather_humidity}%')
+    else:
+        await bot.send_message(message.chat.id, 'Я не нашел странну, пример ввода страны - Молдова, Россия...')
 
 
 if __name__ == "__main__":
