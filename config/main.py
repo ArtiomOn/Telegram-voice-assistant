@@ -15,7 +15,6 @@ from services.storage import generate_unique_destinations
 
 logging.basicConfig(level=logging.INFO)
 
-
 dotenv.load_dotenv()
 
 bot = Bot(token=os.getenv('TOKEN'))
@@ -157,6 +156,7 @@ async def get_video_handler(message: types.Message, query):
 
 
 async def get_weather_handler(message: types.Message, city):
+    walking_status = []
     response = requests.get(
         url=f'http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OWM_KEY}&units=metric')
     if response.status_code == 200:
@@ -179,11 +179,22 @@ async def get_weather_handler(message: types.Message, city):
         elif weather_description.find('rain') > -1:
             sti = open('../static/rain.tgs', 'rb')
             await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+
+        if weather_description.find('clear') != -1 and 35 > int(str(weather_tamp)[:2]) > 15:
+            walking_status.append('Хорошо')
+        elif weather_description.find('rain') != -1 and 35 > int(str(weather_tamp)[:2]) > 25:
+            walking_status.append('Можно, но лучше повременить')
+        elif weather_description.find('clouds') != -1 and 35 > int(str(weather_tamp)[:2]) > 18:
+            walking_status.append('Хорошо, но остерегайтесь дождя')
+        else:
+            walking_status.append('Плохо')
+
         await bot.send_message(message.chat.id, f'Местность - {country_name}\n'
                                                 f'Небо - {weather_description}\n'
                                                 f'Скорость ветра - {wind_speed} m/h\n'
                                                 f'Температура - {str(weather_tamp)[:2]}°C\n'
-                                                f'Влажность - {weather_humidity}%')
+                                                f'Влажность - {weather_humidity}%\n'
+                                                f'Пробежка - {"".join(walking_status)}')
     else:
         await bot.send_message(message.chat.id, 'Я не нашел страну, пример ввода страны - МолдовА, РоссиЯ..')
 
