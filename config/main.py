@@ -149,7 +149,7 @@ async def get_video_handler(message: types.Message, query):
     custom_search = CustomSearch(query=str(query), limit=1, searchPreferences='en')
 
     if custom_search.result()['result']:
-        for i in range(1):
+        for i in range(custom_search.limit):
             await bot.send_message(message.chat.id, dict(custom_search.result()['result'][i]).get('link'))
     else:
         await bot.send_message(message.chat.id, 'Видео не было найдено, попробуйте еще раз.')
@@ -165,34 +165,34 @@ async def get_weather_handler(message: types.Message, city):
         weather_data = response.json().get('weather')
         wind_data = response.json().get('wind')
 
-        weather_tamp = weather_main['temp']
+        weather_temp = weather_main['temp']
         weather_description = weather_data[0]['description']
         weather_humidity = weather_main['humidity']
         wind_speed = wind_data['speed']
 
         if weather_description.find('clouds') > -1:
-            sti = open('../static/clouds.tgs', 'rb')
-            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+            sticker = open('../static/clouds.tgs', 'rb')
+            await bot.send_sticker(sticker=sticker, chat_id=message.chat.id)
         elif weather_description.find('clear') > -1:
-            sti = open('../static/sunny.tgs', 'rb')
-            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+            sticker = open('../static/sunny.tgs', 'rb')
+            await bot.send_sticker(sticker=sticker, chat_id=message.chat.id)
         elif weather_description.find('rain') > -1:
-            sti = open('../static/rain.tgs', 'rb')
-            await bot.send_sticker(sticker=sti, chat_id=message.chat.id)
+            sticker = open('../static/rain.tgs', 'rb')
+            await bot.send_sticker(sticker=sticker, chat_id=message.chat.id)
 
-        if weather_description.find('clear') != -1 and 35 > int(str(weather_tamp)[:2]) > 15:
+        if weather_description.find('clear') != -1 and 35 > int(str(weather_temp)[:2]) > 15:
             walking_status.append('Хорошо')
-        elif weather_description.find('rain') != -1 and 35 > int(str(weather_tamp)[:2]) > 25:
+        elif weather_description.find('rain') != -1 and 35 > int(str(weather_temp)[:2]) > 25:
             walking_status.append('Можно, но лучше повременить')
-        elif weather_description.find('clouds') != -1 and 35 > int(str(weather_tamp)[:2]) > 18:
+        elif weather_description.find('clouds') != -1 and 35 > int(str(weather_temp)[:2]) > 18:
             walking_status.append('Хорошо, но остерегайтесь дождя')
         else:
             walking_status.append('Плохо')
 
         await bot.send_message(message.chat.id, f'Местность - {country_name}\n'
                                                 f'Небо - {weather_description}\n'
-                                                f'Скорость ветра - {wind_speed} m/h\n'
-                                                f'Температура - {str(weather_tamp)[:2]}°C\n'
+                                                f'Скорость ветра - {wind_speed} km/h\n'
+                                                f'Температура - {str(weather_temp)[:2]}°C\n'
                                                 f'Влажность - {weather_humidity}%\n'
                                                 f'Пробежка - {"".join(walking_status)}')
     else:
