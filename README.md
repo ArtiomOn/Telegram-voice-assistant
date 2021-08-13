@@ -1,1 +1,1 @@
-**This bot can create anonymouse/usual poll by voice command in telegram.**
+**This bot can execute various commands by voice in Telegram.**
